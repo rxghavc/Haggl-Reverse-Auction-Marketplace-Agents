@@ -8,6 +8,8 @@ import {
   type TranscriptTurn,
 } from "@/lib/types";
 
+const TURN_REVEAL_MS = 450;
+
 const ENDED_LABELS: Record<string, string> = {
   threshold_met: "Deal reached",
   floor_hold: "Seller held firm",
@@ -90,17 +92,40 @@ function TranscriptPanel({
   loading: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [visibleTurns, setVisibleTurns] = useState(0);
   const vendor = outcome.listing.vendor;
   const endedReason = outcome.negotiation_failed
     ? "failed"
     : record?.endedReason ?? null;
   const turns = record?.transcript ?? [];
+  const revealing = open && visibleTurns < turns.length;
+
+  useEffect(() => {
+    if (!revealing) return;
+    const timer = setTimeout(
+      () => setVisibleTurns((n) => n + 1),
+      visibleTurns === 0 ? 150 : TURN_REVEAL_MS
+    );
+    return () => clearTimeout(timer);
+  }, [revealing, visibleTurns]);
+
+  function toggle() {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)"
+    ).matches;
+    setVisibleTurns(reduceMotion ? Number.MAX_SAFE_INTEGER : 0);
+    setOpen(true);
+  }
 
   return (
     <div className="rounded-md border border-stone-300 bg-white">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggle}
         aria-expanded={open}
         className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
       >
@@ -140,7 +165,7 @@ function TranscriptPanel({
           {!loading && !record && !outcome.negotiation_failed && (
             <p className="text-sm text-stone-500">No transcript recorded.</p>
           )}
-          {turns.map((turn, i) => (
+          {turns.slice(0, visibleTurns).map((turn, i) => (
             <TranscriptLine
               key={i}
               turn={turn}
@@ -148,6 +173,14 @@ function TranscriptPanel({
               listedWarranty={outcome.listing.warranty_months}
             />
           ))}
+          {revealing && (
+            <p className="px-3 text-xs text-stone-400">
+              {turns[visibleTurns].role === "buyer"
+                ? "Buyer agent"
+                : `${vendor} agent`}{" "}
+              is responding…
+            </p>
+          )}
         </div>
       )}
     </div>
@@ -166,7 +199,7 @@ function TranscriptLine({
   const isBuyer = turn.role === "buyer";
   return (
     <div
-      className={`rounded-md px-3 py-2 text-sm ${
+      className={`turn-in rounded-md px-3 py-2 text-sm ${
         isBuyer ? "bg-stone-100" : "bg-emerald-50"
       }`}
     >
