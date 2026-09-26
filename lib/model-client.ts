@@ -26,7 +26,7 @@ const MAX_OUTPUT_TOKENS = process.env.MODEL_MAX_TOKENS
 
 const MAX_RETRY_DELAY_MS = 3_000;
 
-/** Failures worth a second attempt: timeouts, empty replies, network errors, 429/5xx. */
+/** Failures worth a second attempt: empty replies, network errors, 429/5xx. Timeouts are not retried. */
 class RetryableModelError extends Error {
   constructor(
     message: string,
@@ -111,22 +111,10 @@ function mockExtract(ctx?: Record<string, unknown>): ListingExtract {
 function mockSeller(ctx?: Record<string, unknown>): SellerDecision {
   const currentPrice = Number(ctx?.current_price ?? 400);
   const floor = Number(ctx?.floor ?? currentPrice * 0.9);
-  const warrantyRoom = Number(ctx?.warranty_room ?? 0);
   const round = Number(ctx?.round ?? 1);
-  const pressure = String(ctx?.pressure ?? "price");
   const room = currentPrice - floor;
 
-  if (pressure === "warranty" && warrantyRoom > 0) {
-    const add = Math.min(round === 1 ? 2 : 1, warrantyRoom);
-    return {
-      move: "add_warranty",
-      new_price: null,
-      add_warranty_months: add,
-      message: `I can add ${add} month${add === 1 ? "" : "s"} of warranty at $${currentPrice}.`,
-    };
-  }
-
-  const drop = Math.max(5, Math.min(room * (round === 1 ? 0.45 : 0.6), room));
+  const drop = Math.max(4, Math.min(room * (round === 1 ? 0.45 : 0.6), room));
   const next = Math.max(floor, Math.round(currentPrice - drop));
   if (room < 5 || next >= currentPrice - 1) {
     return {
@@ -243,7 +231,7 @@ async function callOnce(
   } catch (e) {
     if (outer?.aborted) throw outer.reason ?? e;
     if (timeout.aborted) {
-      throw new RetryableModelError(`timed out after ${CALL_TIMEOUT_MS}ms`);
+      throw new Error(`timed out after ${CALL_TIMEOUT_MS}ms`);
     }
     throw new RetryableModelError(
       `network error: ${e instanceof Error ? e.message : String(e)}`

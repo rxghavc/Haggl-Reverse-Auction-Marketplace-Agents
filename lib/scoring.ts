@@ -147,8 +147,6 @@ export function weakestAttribute(
 ): "price" | "condition" | "warranty" {
   const priceScores = peers.map((p) => -p.price);
   const condScores = peers.map((p) => conditionRank(p.condition_grade));
-  const warScores = peers.map((p) => p.warranty_months ?? 0);
-
   const selfIdx = peers.findIndex((p) => p.id === listing.id);
   const rankWorse = (vals: number[], idx: number) => {
     const v = vals[idx];
@@ -161,8 +159,14 @@ export function weakestAttribute(
   }> = [
     { key: "price", weakness: rankWorse(priceScores, selfIdx) },
     { key: "condition", weakness: rankWorse(condScores, selfIdx) },
-    { key: "warranty", weakness: rankWorse(warScores, selfIdx) },
   ];
+  // Unknown warranty is not "0 months". Pressing it makes agents invent coverage.
+  if (listing.warranty_months != null) {
+    const warScores = peers.map((p) =>
+      p.warranty_months == null ? -1 : p.warranty_months
+    );
+    attrs.push({ key: "warranty", weakness: rankWorse(warScores, selfIdx) });
+  }
 
   attrs.sort((a, b) => b.weakness - a.weakness);
   return attrs[0].key;

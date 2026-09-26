@@ -2,6 +2,7 @@ import { buildResultCard } from "../result";
 import { blindBaseline, scoreOffers, weakestAttribute } from "../scoring";
 import { dbInsertOutcome } from "../store";
 import type { NegotiationResult, PresetId, ResultCard } from "../types";
+import { buildDealNotice, notifySeller } from "../wassist";
 import { runBuyerNegotiator } from "./buyer-negotiator";
 import { ensureListings } from "./listing-agent";
 
@@ -96,5 +97,29 @@ export async function runBuyerOrchestrator(args: {
     )
   );
 
-  return buildResultCard({ preset, outcomes: scored, blindAsk });
+  const card = buildResultCard({ preset, outcomes: scored, blindAsk });
+  card.sellerNotice = await notifySeller(
+    buildDealNotice({
+      preset,
+      winnerVendor: card.winner.vendor,
+      winnerPrice: card.winner.price,
+      listedWarranty: card.winner.listed_warranty_months,
+      rows: results.map((r) => ({
+        vendor: r.listing.vendor,
+        price: r.finalPrice,
+        listedWarranty: r.listing.warranty_months,
+        pendingMonths: pendingWarranty(r),
+        ended: r.endedReason,
+      })),
+    })
+  );
+  return card;
+}
+
+function pendingWarranty(result: NegotiationResult): number {
+  for (let i = result.transcript.length - 1; i >= 0; i--) {
+    const months = result.transcript[i].offer?.pending_warranty_months ?? 0;
+    if (months > 0) return months;
+  }
+  return 0;
 }

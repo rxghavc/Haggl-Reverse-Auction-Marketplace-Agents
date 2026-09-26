@@ -1,22 +1,14 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-sans: var(--font-figtree), "Figtree", sans-serif;
+  --font-offer: var(--font-fraunces), "Fraunces", Georgia, serif;
+  --color-paper: #f3f5f7;
+  --color-sheet: #ffffff;
+  --color-ink: #1a2332;
+  --color-mute: #5c6775;
+  --color-line: #d7dee6;
+  --color-accent: #0e6b56;
 }
 
 @keyframes turn-in {
@@ -30,18 +22,40 @@
   }
 }
 
+@keyframes negotiate-slide {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(320%);
+  }
+}
+
 .turn-in {
   animation: turn-in 300ms ease-out both;
 }
 
+.negotiate-bar {
+  animation: negotiate-slide 1.4s ease-in-out infinite;
+}
+
+.offer-type {
+  font-family: var(--font-offer);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .turn-in {
+  .turn-in,
+  .negotiate-bar {
     animation: none;
   }
 }
 
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: #ffffff;
+}
+
+body {
+  color: var(--color-ink);
+  font-family: var(--font-sans);
 }

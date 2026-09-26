@@ -313,6 +313,44 @@ export async function dbGetNegotiationTranscripts(
   return all.filter((n) => ids.includes(n.id)).map(toTranscript);
 }
 
+export async function dbGetNegotiation(id: string): Promise<{
+  status: string;
+  final_price: number | null;
+  final_terms: Record<string, unknown>;
+} | null> {
+  try {
+    const sb = getSupabase();
+    const { data, error } = await sb
+      .from("negotiations")
+      .select("status, final_price, final_terms")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) {
+      if (!isPermissionError(error)) throw new Error(error.message);
+      console.warn("[store] negotiations select denied — local fallback");
+    } else if (data) {
+      return {
+        status: data.status as string,
+        final_price: data.final_price as number | null,
+        final_terms: (data.final_terms ?? {}) as Record<string, unknown>,
+      };
+    } else {
+      return null;
+    }
+  } catch (e) {
+    console.warn("[store] negotiations select fallback", e);
+  }
+
+  const all = await readJson<NegotiationRow[]>(NEGOTIATIONS_FILE, []);
+  const row = all.find((n) => n.id === id);
+  if (!row) return null;
+  return {
+    status: row.status,
+    final_price: row.final_price,
+    final_terms: (row.final_terms ?? {}) as Record<string, unknown>,
+  };
+}
+
 const CONFIRMABLE_STATUSES = ["completed", "failed"];
 
 export type ConfirmResult =

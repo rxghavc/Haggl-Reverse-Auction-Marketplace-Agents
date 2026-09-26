@@ -13,7 +13,7 @@ export function describeWarranty(
   if (finalMonths > 0) {
     return `+${finalMonths} mo warranty added (listed warranty unknown)`;
   }
-  return "Warranty not listed";
+  return "Warranty not stated";
 }
 
 export type PresetWeights = {
@@ -43,22 +43,27 @@ export type Listing = {
   created_at?: string;
 };
 
-export type SellerMove = "price_drop" | "add_warranty" | "hold";
+export type SellerMove = "price_drop" | "request_warranty" | "hold";
 
 /** What the seller model decides; the resulting terms are computed in code. */
 export type SellerDecision = {
-  move: SellerMove;
+  move: SellerMove | "add_warranty";
   new_price: number | null;
-  /** Months added this round, not the new total */
+  /** Months the model tried to add. Code never grants these without the seller. */
   add_warranty_months: number | null;
   message: string;
 };
 
 export type SellerOffer = {
   price: number;
+  /** Warranty months that are actually on the listing. Never an invented extension. */
   warranty_months: number;
+  /** Extra months the agent asked the human seller to approve. Not scored. */
+  pending_warranty_months: number;
   move: SellerMove;
   hold: boolean;
+  /** Model tried to grant warranty; the offer does not include it. */
+  warranty_blocked: boolean;
   message: string;
 };
 
@@ -111,7 +116,16 @@ export type ScoredOutcome = {
   negotiation_failed: boolean;
 };
 
+export type SellerNotice = {
+  delivered: boolean;
+  detail: string;
+  /** Present when WhatsApp cannot deliver until this phone opens the chat. */
+  connectUrl?: string;
+};
+
 export type ResultCard = {
+  /** WhatsApp note sent to the human seller. Missing if notification was skipped. */
+  sellerNotice?: SellerNotice;
   winner: {
     vendor: string;
     price: number;

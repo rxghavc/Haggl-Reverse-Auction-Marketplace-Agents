@@ -65,11 +65,10 @@ export function TranscriptPanels({ outcomes }: { outcomes: ScoredOutcome[] }) {
   const ordered = [...outcomes].sort((a, b) => b.total_utility - a.total_utility);
 
   return (
-    <section className="space-y-2">
-      <h3 className="text-xs uppercase tracking-wide text-stone-500">
-        Negotiation transcripts
-      </h3>
+    <section className="space-y-3">
+      <h3 className="text-sm text-mute">What each seller said</h3>
       {loadError && <p className="text-sm text-red-800">{loadError}</p>}
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
       {ordered.map((o) => (
         <TranscriptPanel
           key={o.listing.id}
@@ -78,6 +77,7 @@ export function TranscriptPanels({ outcomes }: { outcomes: ScoredOutcome[] }) {
           loading={loading}
         />
       ))}
+      </div>
     </section>
   );
 }
@@ -122,37 +122,44 @@ function TranscriptPanel({
   }
 
   return (
-    <div className="rounded-md border border-stone-300 bg-white">
+    <div
+      className={`border bg-sheet ${
+        outcome.is_winner
+          ? "border-line border-l-4 border-l-accent"
+          : "border-line"
+      }`}
+    >
       <button
         type="button"
         onClick={toggle}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
         <span className="min-w-0">
-          <span className="flex items-center gap-2 text-sm font-semibold">
+          <span className="flex items-center gap-2 text-sm font-semibold text-ink">
             {vendor}
             {outcome.is_winner && (
-              <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800">
-                Winner
-              </span>
+              <span className="text-xs font-semibold text-accent">Winner</span>
             )}
           </span>
-          <span className="block text-xs text-stone-600">
-            ${outcome.finalPrice.toFixed(0)} ·{" "}
+          <span className="mt-0.5 block text-sm text-mute">
+            Listed ${outcome.listing.price.toFixed(0)}, now $
+            {outcome.finalPrice.toFixed(0)},{" "}
             {describeWarranty(
               outcome.finalWarrantyMonths,
               outcome.listing.warranty_months
             )}
-            {endedReason ? ` · ${ENDED_LABELS[endedReason] ?? endedReason}` : ""}
+            {endedReason
+              ? `, ${ENDED_LABELS[endedReason] ?? endedReason}`
+              : ""}
           </span>
         </span>
-        <span className="shrink-0 text-xs text-stone-500">
+        <span className="shrink-0 text-sm text-mute">
           {open ? "Hide" : "Show"}
         </span>
       </button>
       {open && (
-        <div className="space-y-2 border-t border-stone-200 px-4 py-3">
+        <div className="space-y-2 border-t border-line px-4 py-3">
           {outcome.negotiation_failed && (
             <p className="text-sm text-amber-900">
               Negotiation failed{record?.error ? `: ${record.error}` : ""}.
@@ -160,10 +167,10 @@ function TranscriptPanel({
             </p>
           )}
           {loading && !record && (
-            <p className="text-sm text-stone-500">Loading transcript…</p>
+            <p className="text-sm text-mute">Loading transcript…</p>
           )}
           {!loading && !record && !outcome.negotiation_failed && (
-            <p className="text-sm text-stone-500">No transcript recorded.</p>
+            <p className="text-sm text-mute">No transcript recorded.</p>
           )}
           {turns.slice(0, visibleTurns).map((turn, i) => (
             <TranscriptLine
@@ -174,7 +181,7 @@ function TranscriptPanel({
             />
           ))}
           {revealing && (
-            <p className="px-3 text-xs text-stone-400">
+            <p className="px-3 text-sm text-mute">
               {turns[visibleTurns].role === "buyer"
                 ? "Buyer agent"
                 : `${vendor} agent`}{" "}
@@ -199,18 +206,22 @@ function TranscriptLine({
   const isBuyer = turn.role === "buyer";
   return (
     <div
-      className={`turn-in rounded-md px-3 py-2 text-sm ${
-        isBuyer ? "bg-stone-100" : "bg-emerald-50"
+      className={`turn-in px-3 py-2 text-sm ${
+        isBuyer ? "bg-paper" : "bg-accent/8"
       }`}
     >
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">
-        Round {turn.round} · {isBuyer ? "Buyer agent" : `${vendor} agent`}
+      <p className="text-xs font-medium text-mute">
+        Round {turn.round}, {isBuyer ? "buyer" : vendor}
       </p>
-      <p className="mt-0.5 leading-relaxed text-stone-800">{turn.content}</p>
+      <p className="mt-1 leading-relaxed text-ink">{turn.content}</p>
       {turn.offer && (
-        <p className="mt-1 text-xs font-medium text-emerald-900">
+        <p className="mt-1 text-sm font-medium text-accent">
           Offer: ${turn.offer.price.toFixed(0)} ·{" "}
-          {describeWarranty(turn.offer.warranty_months, listedWarranty)} ·{" "}
+          {describeWarranty(turn.offer.warranty_months, listedWarranty)}
+          {(turn.offer.pending_warranty_months ?? 0) > 0
+            ? ` · +${turn.offer.pending_warranty_months} mo awaiting seller`
+            : ""}
+          {" · "}
           {turn.offer.move.replace(/_/g, " ")}
         </p>
       )}

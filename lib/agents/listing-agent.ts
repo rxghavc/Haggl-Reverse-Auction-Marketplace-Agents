@@ -74,10 +74,11 @@ async function tavilySearch(): Promise<TavilyResult[]> {
     body: JSON.stringify({
       api_key: key,
       query: SEARCH_QUERY,
-      search_depth: "advanced",
+      search_depth: "basic",
       include_answer: false,
-      max_results: 15,
+      max_results: 8,
     }),
+    signal: AbortSignal.timeout(8_000),
   });
 
   if (!res.ok) {
@@ -138,73 +139,96 @@ Return null for any field not confidently found — never guess.`,
   });
 }
 
+async function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<T>((resolve) => {
+    timer = setTimeout(() => resolve(fallback), ms);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 export async function runListingAgent(): Promise<Listing[]> {
-  const results = await tavilySearch();
+  let results: TavilyResult[] = [];
+  try {
+    results = await tavilySearch();
+  } catch (e) {
+    console.warn(
+      "[listings] Tavily search failed",
+      e instanceof Error ? e.message : e
+    );
+  }
   const byVendor = pickVendorResults(results);
   const today = new Date().toISOString().slice(0, 10);
-  const listings: Listing[] = [];
 
-  for (const vendor of TARGET_VENDORS) {
-    const hit = byVendor.get(vendor);
-    let draft: Omit<Listing, "id" | "created_at">;
+  return Promise.all(
+    TARGET_VENDORS.map(async (vendor) => {
+      const hit = byVendor.get(vendor);
+      let draft: Omit<Listing, "id" | "created_at">;
 
-    if (hit) {
-      const extracted = await extractListing(vendor, hit);
-      if (
-        extracted.vendor == null ||
-        extracted.price == null ||
-        extracted.source_url == null
-      ) {
+      if (hit) {
+        const extracted = await extractListing(vendor, hit);
+        if (
+          extracted.vendor == null ||
+          extracted.price == null ||
+          extracted.source_url == null
+        ) {
+          draft = {
+            ...MOCK_FALLBACKS[vendor],
+            original_listed_date: today,
+            shopify_product_id: null,
+          };
+        } else {
+          draft = {
+            vendor: TARGET_VENDORS.includes(
+              extracted.vendor as (typeof TARGET_VENDORS)[number]
+            )
+              ? (extracted.vendor as (typeof TARGET_VENDORS)[number])
+              : vendor,
+            source_url: extracted.source_url,
+            price: extracted.price,
+            condition_grade: extracted.condition_grade,
+            warranty_months: extracted.warranty_months,
+            battery_health: null,
+            original_listed_date: today,
+            shopify_product_id: null,
+          };
+        }
+      } else {
         draft = {
           ...MOCK_FALLBACKS[vendor],
           original_listed_date: today,
           shopify_product_id: null,
         };
-      } else {
-        draft = {
-          vendor: TARGET_VENDORS.includes(
-            extracted.vendor as (typeof TARGET_VENDORS)[number]
-          )
-            ? (extracted.vendor as (typeof TARGET_VENDORS)[number])
-            : vendor,
-          source_url: extracted.source_url,
-          price: extracted.price,
-          condition_grade: extracted.condition_grade,
-          warranty_months: extracted.warranty_months,
-          battery_health: null,
-          original_listed_date: today,
-          shopify_product_id: null,
-        };
       }
-    } else {
-      draft = {
-        ...MOCK_FALLBACKS[vendor],
-        original_listed_date: today,
-        shopify_product_id: null,
-      };
-    }
 
-    let shopifyProductId = await dbFindShopifyProductId(
-      draft.vendor,
-      draft.source_url,
-      draft.price
-    );
-    if (!shopifyProductId) {
-      const shopify = await createProductFromListing(draft);
-      if (shopify.error) {
-        console.warn(`[shopify] ${vendor}: ${shopify.error}`);
-      }
-      shopifyProductId = shopify.productId;
-    }
+      const shopifyProductId = await withTimeout(
+        (async () => {
+          const existing = await dbFindShopifyProductId(
+            draft.vendor,
+            draft.source_url,
+            draft.price
+          );
+          if (existing) return existing;
+          const shopify = await createProductFromListing(draft);
+          if (shopify.error) {
+            console.warn(`[shopify] ${vendor}: ${shopify.error}`);
+          }
+          return shopify.productId;
+        })(),
+        5_000,
+        null
+      );
 
-    const saved = await dbInsertListing({
-      ...draft,
-      shopify_product_id: shopifyProductId,
-    });
-    listings.push(saved);
-  }
-
-  return listings;
+      return dbInsertListing({
+        ...draft,
+        shopify_product_id: shopifyProductId,
+      });
+    })
+  );
 }
 
 /** Latest one listing per target vendor, or empty if none. */

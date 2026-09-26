@@ -12,7 +12,7 @@ Shopping across multiple sellers — refurb electronics, in our case — means e
 
 Point it at a product (refurbished iPhone 14 128GB, for the demo). Haggl:
 
-1. **Finds three real listings** — Back Market, Reebelo, Swappa — sourced live via Tavily on every run and normalized into one schema.
+1. **Finds three real listings** — Back Market, Reebelo, Swappa — sourced via Tavily and reused until a refresh is needed.
 2. **Spins up an isolated AI agent for each seller**, with a price floor it won't go below.
 3. **Runs a buyer agent against all three simultaneously**, pushing each seller on whatever it's weakest on: price, condition, or warranty.
 4. **Scores the outcomes under your priority** — cheapest, best condition, longest warranty, or balanced — and surfaces the winner with a one-line reason.
@@ -23,8 +23,8 @@ Run the same three listings through two different presets and the winner changes
 
 - **Nothing buys itself.** The winning deal needs an explicit **Confirm Purchase** from a human, which moves the negotiation's status to `confirmed`. No payment is taken.
 - **Failures are shown, not hidden.** If a seller's negotiation times out or fails, Haggl scores it on its listed terms and labels it as unnegotiated. A failed seller can still win if its listing is genuinely competitive — and the card says so.
-- **No invented facts.** If a listing doesn't state a warranty, Haggl says "Warranty not listed" rather than "0 months."
-- **Seller agents act within a mandate.** Each seller agent has a price floor and may add at most 3 months beyond its listed warranty — and none if the listing states no warranty to extend. The model only picks a move; the code computes the resulting terms, and any message that misstates them is replaced with one that doesn't.
+- **No invented facts.** If a listing doesn't state a warranty, Haggl says "Warranty not listed" rather than "0 months." Agents cannot grant extra warranty. A request for more coverage is sent to the seller on WhatsApp and is not counted until they approve it.
+- **Seller agents act within a mandate.** Each seller agent has a price floor and can only drop price or hold. The model picks a move; the code computes the price, and any message that invents warranty or quotes a different price is replaced.
 - **A hold ends the negotiation.** When a seller holds firm, Haggl stops negotiating with it instead of spending more rounds.
 
 ## What it doesn't do
@@ -35,12 +35,12 @@ It doesn't discover what to buy — it optimizes the deal once you know. It's sc
 
 - **Next.js** app on Vercel; **Supabase** for listings, negotiations, and outcomes; **Shopify** Admin API mirrors each listing as a product.
 - **Model-agnostic**: any OpenAI-compatible endpoint. Swapping providers is a config change (`MODEL_BASE_URL`, `MODEL_NAME`). The demo runs `openai/gpt-4o-mini` via OpenRouter for reliability under rate limits.
-- **Resilient negotiation**: sellers run in parallel with `Promise.allSettled`, a 20s per-call timeout with one retry, and a 90s budget per run. One failed seller never takes down the other two.
+- **Resilient negotiation**: sellers run in parallel with `Promise.allSettled`, a 20s per-call timeout (retried on empty replies and 429/5xx, not on timeout), and a 90s budget per run. The buyer ask is computed from the other listings, so each seller needs at most two model calls. One failed seller never takes down the other two.
 
 | Path | Role |
 | --- | --- |
 | `lib/agents/listing-agent.ts` | Listing agent: Tavily search → LLM extraction → Supabase + Shopify |
-| `lib/agents/seller-agent.ts` | Seller agent: concession menu (drop price, add warranty, hold) above its floor |
+| `lib/agents/seller-agent.ts` | Seller agent: drop price or hold above its floor. Warranty changes are sent to the seller, not granted |
 | `lib/agents/buyer-negotiator.ts` | Buyer agent: up to 3 rounds per seller, pressures the weakest attribute |
 | `lib/agents/buyer-orchestrator.ts` | Runs all three negotiations in parallel and scores them |
 | `lib/scoring.ts` | Preset weights and relative price / condition / warranty scores |
