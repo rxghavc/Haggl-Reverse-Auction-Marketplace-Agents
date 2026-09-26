@@ -66,6 +66,15 @@ export type TranscriptTurn = {
   offer?: SellerOffer;
 };
 
+/** Persisted negotiation as read back from the transcript jsonb column */
+export type NegotiationTranscript = {
+  id: string;
+  status: string;
+  transcript: TranscriptTurn[];
+  endedReason: string | null;
+  error: string | null;
+};
+
 export type NegotiationResult = {
   listing: Listing;
   negotiationId: string;

@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { promises as fs } from "fs";
 import path from "path";
-import type { Listing } from "./types";
+import type { Listing, NegotiationTranscript, TranscriptTurn } from "./types";
 import { getSupabase } from "./supabase";
 
 const DATA_DIR =
@@ -267,6 +267,50 @@ export async function dbUpdateNegotiation(
     };
     await writeJson(NEGOTIATIONS_FILE, all);
   }
+}
+
+function toTranscript(row: {
+  id: string;
+  status: string;
+  transcript: unknown;
+  final_terms: unknown;
+}): NegotiationTranscript {
+  const terms = (row.final_terms ?? {}) as {
+    ended_reason?: string;
+    error?: string;
+  };
+  return {
+    id: row.id,
+    status: row.status,
+    transcript: Array.isArray(row.transcript)
+      ? (row.transcript as TranscriptTurn[])
+      : [],
+    endedReason: terms.ended_reason ?? null,
+    error: terms.error ?? null,
+  };
+}
+
+export async function dbGetNegotiationTranscripts(
+  ids: string[]
+): Promise<NegotiationTranscript[]> {
+  if (!ids.length) return [];
+  try {
+    const sb = getSupabase();
+    const { data, error } = await sb
+      .from("negotiations")
+      .select("id, status, transcript, final_terms")
+      .in("id", ids);
+    if (error) {
+      if (!isPermissionError(error)) throw new Error(error.message);
+    } else {
+      return (data ?? []).map(toTranscript);
+    }
+  } catch (e) {
+    console.warn("[store] transcripts select fallback", e);
+  }
+
+  const all = await readJson<NegotiationRow[]>(NEGOTIATIONS_FILE, []);
+  return all.filter((n) => ids.includes(n.id)).map(toTranscript);
 }
 
 const CONFIRMABLE_STATUSES = ["completed", "failed"];
