@@ -36,6 +36,11 @@ yarn-error.log*
 # vercel
 .vercel
 
+# local fallback store (when Supabase grants missing)
+.data/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+.vercel
