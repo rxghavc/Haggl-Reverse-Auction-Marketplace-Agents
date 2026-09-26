@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { describeWarranty, type PresetId, type ResultCard } from "@/lib/types";
+import { TranscriptPanels } from "./transcript-panels";
 
 const PRESETS: { id: PresetId; label: string }[] = [
   { id: "balanced", label: "Balanced" },
@@ -216,6 +217,8 @@ export default function Home() {
             </div>
           </article>
         )}
+
+        {result && <TranscriptPanels outcomes={result.outcomes} />}
       </main>
     </div>
   );
