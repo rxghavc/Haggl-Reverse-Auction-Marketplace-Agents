@@ -45,6 +45,15 @@ export type Listing = {
 
 export type SellerMove = "price_drop" | "add_warranty" | "hold";
 
+/** What the seller model decides; the resulting terms are computed in code. */
+export type SellerDecision = {
+  move: SellerMove;
+  new_price: number | null;
+  /** Months added this round, not the new total */
+  add_warranty_months: number | null;
+  message: string;
+};
+
 export type SellerOffer = {
   price: number;
   warranty_months: number;
