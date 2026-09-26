@@ -2,7 +2,7 @@
 
 **Haggl is a reverse-auction marketplace layer.** Instead of picking the cheapest listing, three AI seller agents compete for your business in parallel, and you win on price, condition, and warranty together — not just the lowest number.
 
-Live demo: [legibility-agent.vercel.app](https://legibility-agent.vercel.app)
+Live demo: [haggl-app.vercel.app](https://haggl-app.vercel.app)
 
 ## The problem
 
@@ -24,6 +24,8 @@ Run the same three listings through two different presets and the winner changes
 - **Nothing buys itself.** The winning deal needs an explicit **Confirm Purchase** from a human, which moves the negotiation's status to `confirmed`. No payment is taken.
 - **Failures are shown, not hidden.** If a seller's negotiation times out or fails, Haggl scores it on its listed terms and labels it as unnegotiated. A failed seller can still win if its listing is genuinely competitive — and the card says so.
 - **No invented facts.** If a listing doesn't state a warranty, Haggl says "Warranty not listed" rather than "0 months."
+- **Seller agents act within a mandate.** Each seller agent has a price floor and may add at most 3 months beyond its listed warranty — and none if the listing states no warranty to extend. The model only picks a move; the code computes the resulting terms, and any message that misstates them is replaced with one that doesn't.
+- **A hold ends the negotiation.** When a seller holds firm, Haggl stops negotiating with it instead of spending more rounds.
 
 ## What it doesn't do
 
