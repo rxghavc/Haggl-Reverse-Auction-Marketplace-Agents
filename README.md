@@ -1,49 +1,93 @@
 # Haggl
 
-**Haggl is a reverse-auction marketplace layer.** Instead of picking the cheapest listing, three AI seller agents compete for your business in parallel, and you win on price, condition, and warranty together — not just the lowest number.
+Haggl is a reverse-auction layer for a purchase you already want. Seller agents compete in parallel on price, condition, and warranty. You see one scored deal, with the listing price next to the negotiated price, and nothing is bought until you confirm.
 
 Live demo: [haggl-app.vercel.app](https://haggl-app.vercel.app)
 
-## The problem
+Built at the [Grok Bot Commerce London Hackathon](https://gb-ecommerce-hackathon-09-2026.teamdeel.workers.dev/hackathon) on 26 September 2026 at Fleek HQ. The brief was agentic commerce: what a storefront looks like when the customer is a bot, whether a bot can negotiate, and how a person authorizes the purchase.
 
-Shopping across multiple sellers — refurb electronics, in our case — means either taking the first listing you see, or burning 20 minutes across five tabs comparing price against condition against warranty. Nobody does that math properly, so most people default to "cheapest," even when a slightly pricier option with three extra months of warranty is the objectively better deal.
+The live run trials one product, a refurbished iPhone 14 128GB Unlocked, with three sellers: Back Market, Reebelo, and Swappa. The product is not a phone app, and it is not limited to three sellers. Point it at any product, with as many listings as you have.
 
-## What Haggl does
+## How it works
 
-Point it at a product (refurbished iPhone 14 128GB, for the demo). Haggl:
+1. The listing agent finds real pages for the product and turns each one into a structured record: vendor, price, condition, warranty, source URL.
+2. That record is stored in Supabase and mirrored as a Shopify product, so the negotiation sits on a commerce object instead of a scraped blob.
+3. A buyer orchestrator starts one negotiation per seller at the same time.
+4. Each seller agent can drop its price or hold, above a floor it will not cross.
+5. Haggl scores the finished offers under the priority you picked and shows the winner, the reason, and what each seller said.
 
-1. **Finds three real listings** — Back Market, Reebelo, Swappa — sourced via Tavily and reused until a refresh is needed.
-2. **Spins up an isolated AI agent for each seller**, with a price floor it won't go below.
-3. **Runs a buyer agent against all three simultaneously**, pushing each seller on whatever it's weakest on: price, condition, or warranty.
-4. **Scores the outcomes under your priority** — cheapest, best condition, longest warranty, or balanced — and surfaces the winner with a one-line reason.
+Run the same listings under two priorities and the winner can change. The result is a tradeoff, not a sort by price.
 
-Run the same three listings through two different presets and the winner changes. That's the proof this isn't a price-sort with extra steps.
+## The agents
 
-## Trust and control
+### Listing agent
 
-- **Nothing buys itself.** The winning deal needs an explicit **Confirm Purchase** from a human, which moves the negotiation's status to `confirmed`. No payment is taken.
-- **Failures are shown, not hidden.** If a seller's negotiation times out or fails, Haggl scores it on its listed terms and labels it as unnegotiated. A failed seller can still win if its listing is genuinely competitive — and the card says so.
-- **No invented facts.** If a listing doesn't state a warranty, Haggl says "Warranty not listed" rather than "0 months." Agents cannot grant extra warranty. A request for more coverage is sent to the seller on WhatsApp and is not counted until they approve it.
-- **Seller agents act within a mandate.** Each seller agent has a price floor and can only drop price or hold. The model picks a move; the code computes the price, and any message that invents warranty or quotes a different price is replaced.
-- **A hold ends the negotiation.** When a seller holds firm, Haggl stops negotiating with it instead of spending more rounds.
+This is the legibility step. Marketplace pages do not share a schema. Tavily searches for the product, the agent keeps hits that belong to the target sellers, and a model extracts only the fields it can actually read. Missing warranty stays null. It does not guess.
 
-## What it doesn't do
+Each accepted listing is written to Supabase and created in Shopify through the Admin API, reusing an existing Shopify product when the same vendor, URL, and price are already there. Later runs reuse those listings until you ask for a refresh.
 
-It doesn't discover what to buy — it optimizes the deal once you know. It's scoped to one product category by design: proving the mechanic beats faking breadth in a one-day build.
+### Buyer orchestrator
 
-## How it's built
+Loads the listings, picks the weakest attribute to pressure for the chosen preset, and runs every seller negotiation with `Promise.allSettled`. One failed seller does not cancel the others. There is a 90 second budget for the run.
 
-- **Next.js** app on Vercel; **Supabase** for listings, negotiations, and outcomes; **Shopify** Admin API mirrors each listing as a product.
-- **Model-agnostic**: any OpenAI-compatible endpoint. Swapping providers is a config change (`MODEL_BASE_URL`, `MODEL_NAME`). The demo runs `openai/gpt-4o-mini` via OpenRouter for reliability under rate limits.
-- **Resilient negotiation**: sellers run in parallel with `Promise.allSettled`, a 20s per-call timeout (retried on empty replies and 429/5xx, not on timeout), and a 90s budget per run. The buyer ask is computed from the other listings, so each seller needs at most two model calls. One failed seller never takes down the other two.
+### Buyer negotiator
+
+One conversation per seller, up to two rounds. The ask is computed from the other listings and a small step down from the listed price. It is not a free-form model request for a fantasy number. The transcript is saved with the negotiation.
+
+### Seller agent
+
+Isolated from the other sellers. It has the listing, a price floor, and two moves: drop the price, or hold. The model chooses the move. The code commits the price. A message that invents a warranty, or quotes a different price than the one committed, is replaced with the terms the code actually recorded. A hold ends that seller's negotiation.
+
+## What you get
+
+The live run returns one card:
+
+- The winning seller, the price it settled on, and the price it was listed at.
+- Condition and warranty. Unknown warranty reads "Warranty not stated", not "0 months".
+- A one-line reason for the score.
+- Listed price, negotiated price, and what you save against that listing.
+- A collapsed transcript for each seller. The winner is marked. On a wide screen the three sit side by side.
+- Confirm. That writes the negotiation status to `confirmed`. No payment is taken.
+
+Presets: balanced, cheapest, best condition, longest warranty.
+
+## Clarifications
+
+- Haggl does not decide what to buy. It improves the deal once you know the product.
+- The iPhone and the three sellers are the trial we shipped in a day. The same loop applies to another product and another set of sellers.
+- Warranty in the score is the warranty on the listing. A seller cannot grant extra months. A request for more coverage can be sent to the seller on WhatsApp through Wassist, and it is not counted unless they approve it.
+- If a negotiation fails or times out, Haggl scores that seller on its listed terms and says so. A failed seller can still win when the listing is the better deal.
+- Seller agents stay inside a mandate: a floor, a price drop, or a hold. They do not invent facts to win the score.
+
+## Stack
+
+| Piece | Role |
+| --- | --- |
+| Next.js on Vercel | Product page, live run, and the negotiate and confirm APIs |
+| Tavily | Search for the real listing pages |
+| Listing agent | Extract structured fields from those pages. Never fill in a missing fact |
+| Supabase | Listings, negotiations, transcripts, outcomes |
+| Shopify Admin API | Mirror each listing as a product the deal is attached to |
+| Buyer and seller agents | Parallel negotiation. OpenAI-compatible model endpoint |
+| Wassist | WhatsApp notice to the seller when a deal needs a human check |
+| Scoring | Preset weights over price, condition, and listed warranty |
+
+The model is a config change: `MODEL_BASE_URL` and `MODEL_NAME`. The demo uses `openai/gpt-4o-mini` through OpenRouter. Timeouts are not retried. Empty replies and 429 or 5xx responses are retried once. Each seller needs at most two model calls because the buyer ask is computed.
 
 | Path | Role |
 | --- | --- |
-| `lib/agents/listing-agent.ts` | Listing agent: Tavily search → LLM extraction → Supabase + Shopify |
-| `lib/agents/seller-agent.ts` | Seller agent: drop price or hold above its floor. Warranty changes are sent to the seller, not granted |
-| `lib/agents/buyer-negotiator.ts` | Buyer agent: up to 3 rounds per seller, pressures the weakest attribute |
-| `lib/agents/buyer-orchestrator.ts` | Runs all three negotiations in parallel and scores them |
-| `lib/scoring.ts` | Preset weights and relative price / condition / warranty scores |
+| `lib/agents/listing-agent.ts` | Tavily search, extraction, Supabase, Shopify |
+| `lib/agents/buyer-orchestrator.ts` | Parallel negotiations and the result card |
+| `lib/agents/buyer-negotiator.ts` | Up to two rounds per seller |
+| `lib/agents/seller-agent.ts` | Drop price or hold, above the floor |
+| `lib/scoring.ts` | Preset weights and relative scores |
+| `lib/wassist.ts` | Seller notice |
+
+## Partners
+
+Built during Cursor Commerce London, hosted at Fleek HQ by Josh Warwick (Wassist), Tamas Zoltan Palecian (Huge), and Francisco Terpolilli (Cursor).
+
+Haggl uses Cursor, Vercel, Supabase, Shopify, Tavily, and Wassist.
 
 ## Run locally
 
@@ -52,9 +96,9 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000, pick a preset, and press **Negotiate**.
+Open http://localhost:3000 and choose Live run.
 
-Copy `.env.example` to `.env.local`. With `MOCK_MODE=true` (or no model configured) the agents return deterministic mock responses. For real negotiations set:
+Copy `.env.example` to `.env.local`. With `MOCK_MODE=true`, or with no model configured, the agents return deterministic responses. For a real run:
 
 ```
 MOCK_MODE=false
@@ -67,6 +111,7 @@ If Supabase returns `permission denied for table …`, run [`scripts/fix-grants.
 
 ## API
 
-- `POST /api/negotiate` — `{ "preset": "balanced" | "cheapest" | "best_condition" | "longest_warranty", "refreshListings"?: boolean }`
-- `POST /api/confirm` — `{ "negotiationId": string }`; marks the winning negotiation `confirmed`
-- `POST /api/listings` — refresh listings only (Tavily → extract → Supabase + Shopify)
+- `POST /api/negotiate` with `{ "preset": "balanced" | "cheapest" | "best_condition" | "longest_warranty", "refreshListings"?: boolean }`
+- `POST /api/confirm` with `{ "negotiationId": string }`. Marks that negotiation `confirmed`.
+- `POST /api/listings` refreshes listings only: Tavily, extract, Supabase, Shopify.
+- `GET /api/transcripts?ids=` returns the saved buyer and seller turns for a finished run.
