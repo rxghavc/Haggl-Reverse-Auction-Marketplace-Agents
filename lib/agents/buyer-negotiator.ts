@@ -89,8 +89,9 @@ async function negotiate(
       role: "BUYER",
       system: `BUYER negotiator. Isolated session vs ${args.listing.vendor}.
 Preset: ${args.preset}. Open by pressuring: ${args.pressure} (this seller's weakest attribute vs peers).
-Max ${MAX_ROUNDS} rounds. Return JSON:
-{ "message": string, "pressure_attribute": "price"|"condition"|"warranty", "accept": boolean }`,
+Max ${MAX_ROUNDS} rounds. If the seller says it can't move on something, switch to what it can move on.
+"pressure_attribute" must be the attribute your message asks the seller to improve.
+Return JSON: { "message": string, "pressure_attribute": "price"|"condition"|"warranty", "accept": boolean }`,
       messages: [
         {
           role: "user",
@@ -126,7 +127,7 @@ Max ${MAX_ROUNDS} rounds. Return JSON:
     seller = state;
     transcript.push(turn);
 
-    if (seller.consecutiveHolds >= 2) {
+    if (seller.consecutiveHolds >= 1) {
       endedReason = "floor_hold";
       break;
     }
