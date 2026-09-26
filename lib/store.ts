@@ -6,7 +6,7 @@ import { getSupabase } from "./supabase";
 
 const DATA_DIR =
   process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME
-    ? path.join("/tmp", "legibility-agent-data")
+    ? path.join("/tmp", "haggl-data")
     : path.join(process.cwd(), ".data");
 const LISTINGS_FILE = path.join(DATA_DIR, "listings.json");
 const NEGOTIATIONS_FILE = path.join(DATA_DIR, "negotiations.json");

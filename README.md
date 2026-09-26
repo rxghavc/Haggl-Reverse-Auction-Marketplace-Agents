@@ -37,7 +37,7 @@ It doesn't discover what to buy — it optimizes the deal once you know. It's sc
 
 | Path | Role |
 | --- | --- |
-| `lib/agents/legibility.ts` | Listing agent: Tavily search → LLM extraction → Supabase + Shopify |
+| `lib/agents/listing-agent.ts` | Listing agent: Tavily search → LLM extraction → Supabase + Shopify |
 | `lib/agents/seller-agent.ts` | Seller agent: concession menu (drop price, add warranty, hold) above its floor |
 | `lib/agents/buyer-negotiator.ts` | Buyer agent: up to 3 rounds per seller, pressures the weakest attribute |
 | `lib/agents/buyer-orchestrator.ts` | Runs all three negotiations in parallel and scores them |
@@ -67,4 +67,4 @@ If Supabase returns `permission denied for table …`, run [`scripts/fix-grants.
 
 - `POST /api/negotiate` — `{ "preset": "balanced" | "cheapest" | "best_condition" | "longest_warranty", "refreshListings"?: boolean }`
 - `POST /api/confirm` — `{ "negotiationId": string }`; marks the winning negotiation `confirmed`
-- `POST /api/legibility` — refresh listings only (Tavily → extract → Supabase + Shopify)
+- `POST /api/listings` — refresh listings only (Tavily → extract → Supabase + Shopify)
