@@ -64,7 +64,7 @@ function matchVendor(text: string): (typeof TARGET_VENDORS)[number] | null {
 async function tavilySearch(): Promise<TavilyResult[]> {
   const key = process.env.TAVILY_API_KEY;
   if (!key) {
-    console.warn("[legibility] TAVILY_API_KEY missing — using mock listings");
+    console.warn("[listings] TAVILY_API_KEY missing — using mock listings");
     return [];
   }
 
@@ -81,7 +81,7 @@ async function tavilySearch(): Promise<TavilyResult[]> {
   });
 
   if (!res.ok) {
-    console.error("[legibility] Tavily error", await res.text());
+    console.error("[listings] Tavily error", await res.text());
     return [];
   }
 
@@ -138,7 +138,7 @@ Return null for any field not confidently found — never guess.`,
   });
 }
 
-export async function runLegibilityAgent(): Promise<Listing[]> {
+export async function runListingAgent(): Promise<Listing[]> {
   const results = await tavilySearch();
   const byVendor = pickVendorResults(results);
   const today = new Date().toISOString().slice(0, 10);
@@ -217,5 +217,5 @@ export async function ensureListings(refresh = false): Promise<Listing[]> {
     const existing = await getLatestListings();
     if (existing.length === 3) return existing;
   }
-  return runLegibilityAgent();
+  return runListingAgent();
 }

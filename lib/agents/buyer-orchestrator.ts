@@ -3,7 +3,7 @@ import { blindBaseline, scoreOffers, weakestAttribute } from "../scoring";
 import { dbInsertOutcome } from "../store";
 import type { NegotiationResult, PresetId, ResultCard } from "../types";
 import { runBuyerNegotiator } from "./buyer-negotiator";
-import { ensureListings } from "./legibility";
+import { ensureListings } from "./listing-agent";
 
 /** Per-seller budget, leaving headroom under the route's 120s maxDuration. */
 const NEGOTIATION_BUDGET_MS = 90_000;
