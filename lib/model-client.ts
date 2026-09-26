@@ -1,7 +1,7 @@
 import type {
   BuyerMessage,
   ListingExtract,
-  SellerOffer,
+  SellerDecision,
 } from "./types";
 
 export type ModelRole = "EXTRACT" | "SELLER" | "BUYER";
@@ -108,57 +108,40 @@ function mockExtract(ctx?: Record<string, unknown>): ListingExtract {
   };
 }
 
-function mockSeller(ctx?: Record<string, unknown>): SellerOffer {
-  const asking = Number(ctx?.asking_price ?? 400);
-  const floor = Number(ctx?.floor ?? asking * 0.9);
-  const currentPrice = Number(ctx?.current_price ?? asking);
-  const currentWarranty = Number(ctx?.current_warranty ?? 12);
+function mockSeller(ctx?: Record<string, unknown>): SellerDecision {
+  const currentPrice = Number(ctx?.current_price ?? 400);
+  const floor = Number(ctx?.floor ?? currentPrice * 0.9);
+  const warrantyRoom = Number(ctx?.warranty_room ?? 0);
   const round = Number(ctx?.round ?? 1);
   const pressure = String(ctx?.pressure ?? "price");
-  const lastHold = Boolean(ctx?.last_hold);
-
   const room = currentPrice - floor;
 
-  if (lastHold || (room < 5 && round >= 2)) {
+  if (pressure === "warranty" && warrantyRoom > 0) {
+    const add = Math.min(round === 1 ? 2 : 1, warrantyRoom);
     return {
-      price: currentPrice,
-      warranty_months: currentWarranty,
-      move: "hold",
-      hold: true,
-      message: `I am holding firm at $${currentPrice.toFixed(0)} with ${currentWarranty} months warranty.`,
-    };
-  }
-
-  if (pressure === "warranty" && room < asking * 0.08) {
-    const add = round === 1 ? 2 : 1;
-    return {
-      price: currentPrice,
-      warranty_months: currentWarranty + add,
       move: "add_warranty",
-      hold: false,
-      message: `I can add +${add} months warranty at the current price of $${currentPrice.toFixed(0)}.`,
+      new_price: null,
+      add_warranty_months: add,
+      message: `I can add ${add} month${add === 1 ? "" : "s"} of warranty at $${currentPrice}.`,
     };
   }
 
   const drop = Math.max(5, Math.min(room * (round === 1 ? 0.45 : 0.6), room));
   const next = Math.max(floor, Math.round(currentPrice - drop));
-
-  if (next >= currentPrice - 1) {
+  if (room < 5 || next >= currentPrice - 1) {
     return {
-      price: currentPrice,
-      warranty_months: currentWarranty,
       move: "hold",
-      hold: true,
-      message: `That is as low as I can go — $${currentPrice.toFixed(0)}.`,
+      new_price: null,
+      add_warranty_months: null,
+      message: `That is as low as I can go — $${currentPrice}.`,
     };
   }
 
   return {
-    price: next,
-    warranty_months: currentWarranty,
     move: "price_drop",
-    hold: false,
-    message: `I can come down to $${next.toFixed(0)} (still includes ${currentWarranty} months warranty).`,
+    new_price: next,
+    add_warranty_months: null,
+    message: `I can come down to $${next}.`,
   };
 }
 
